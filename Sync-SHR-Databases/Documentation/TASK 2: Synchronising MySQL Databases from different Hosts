@@ -1,0 +1,185 @@
+Prerequisites:
+        ◦ Ensure openSSH server is installed on both source and replica server: 
+check whether OpenSSH is installed on both source and replica: 
+$ sudo apt list --installed | grep openssh-server
+If not installed, install it:
+$ sudo apt install openssh-server
+Start openSSH server:
+$ sudo service ssh start
+
+        ◦ Adjusting Your Source Server’s Firewall
+allow connections from the replica server’s IP address to MySQL’s default port number, 3306:
+source:~$ sudo ufw allow from replica_server_ip to any port 3306
+        ◦ Create database
+
+
+
+Configure the source database
+For MySQL database to begin replicating data, change its configuration from mysqld.cnf:
+
+
+source:~$ sudo nano /etc/mysql/mysql.conf.d/mysqld.cnf
+
+Replace bind address 127.0.0.1 with the source server’s IP address: 
+
+bind-address            = 192.168.19.145
+
+Assign unique server-id value:
+port                      = 3306
+server-id             = 1
+
+Next, find the log_bin directive, which defines the base name and location of MySQL’s binary log file and uncomment this line to enable binary logging on the source:
+
+log_bin                       = /var/log/mysql/mysql-bin.log
+sync_binlog = 1
+Innodb_flush_log_at_trx_commit = 1 
+
+
+
+Next, find the  binlog_do_db directive. Uncomment this line and replace include_database_name with the name of the database you want to replicate:
+
+#binlog_do_db          =  student_results_db
+
+For replication of more than one databases:
+
+binlog_do_db          = db
+binlog_do_db          = db_1 
+binlog_do_db          = db_2
+
+Alternatively, one can specify which databases MySQL should not replicate by adding a binlog_ignore_db directive for each one:
+
+binlog_ignore_db          = db_to_ignore
+Save file
+
+Restart the MySQL service with the following command: 
+      source:~$ sudo systemctl restart mysql   
+
+Creating a Replication User
+opening up the MySQL shell:
+source:~$ sudo mysql
+
+mysql> CREATE USER replica_user@192.168.19.145 BY M0Jau@123 REQUIRE SSL;
+
+mysql> GRANT REPLICATION SLAVE ON *.* TO replica_user@192.168.19.145;
+
+mysql> FLUSH PRIVILEGES;
+
+Retrieving Binary Log Coordinates from the Source
+Lock student_results_db so no users can change data while you are retrieving binary log file coordinates:
+mysql> FLUSH TABLES WITH READ LOCK;
+
+mysql> SHOW MASTER STATUS;
+
+Output:
+
+
+Unlock your tables:
+mysql> UNLOCK TABLES;
+
+
+Migrate Existing Database
+Export source database using mysqldump to create db snapshot:
+source:~$ sudo mysqldump -u root student_results_db > student_results_db.sql
+
+Copy snapshot to replica server(use ubuntu account username from replica machine):
+source:~$ scp student_results_db.sql mojau_p@192.168.19.145:/tmp/
+
+SSH into replica machine:
+source:~$ ssh mojau_p@192.168.19.145
+
+Access mySQL shell and create database with same name as that in source:
+replica:~$ sudo mysql
+
+mysql> CREATE DATABASE student_results_db;
+mysql>exit;
+ 
+Import snapshot into mysql:
+replica:~$ sudo mysql db < /tmp/student_results_db.sql
+Configuring the Replica Database
+Open up the MySQL configuration file, mysqld.cnf on replica server:
+
+   replica:~ $ sudo nano /etc/mysql/mysql.conf.d/mysqld.cnf
+
+Assign unique server-id value.
+server-id = 2
+
+Following that, update the log_bin and binlog_do_db values so that they align with the values you set in the source machine’s configuration file:
+
+log_bin               = /var/log/mysql/mysql-bin.log 
+binlog_do_db     = db
+
+Add a relay-log directive defining the location of the replica’s relay log file: 
+
+relay-log  = /var/log/mysql/mysql-relay-bin.log
+
+Save file. Then restart MySQL on the replica to implement the new configuration:
+
+replica :~ $ sudo systemctl restart mysql
+
+After restarting the mysql service, you’re finally ready to start replicating data from your source database.
+
+Starting and Testing Replication
+
+To start replicating data from your source, open up the the MySQL shell on your replica server:
+
+replica:~$ sudo mysql
+
+Enable replication on this instance it will try to connect to the IP address following SOURCE_HOST using the username and password following SOURCE_USER and SOURCE_PASSWORD, respectively:
+
+CHANGE REPLICATION SOURCE TO
+SOURCE_HOST='192.168.19.149',
+SOURCE_USER='replica_user',
+SOURCE_PASSWORD='M0Jau@123',
+SOURCE_LOG_FILE='mysql-bin.000005',
+SOURCE_LOG_POS=1436;
+
+Then, activate the replica server:
+
+
+START REPLICA;
+
+If entered correctly, this instance will begin replicating any changes made to the database on the source.
+
+To see details about the replica’s current state run the following operation:
+
+SHOW REPLICA STATUS\G;
+
+
+
+
+Note: If your replica has an issue in connecting or replication stops unexpectedly, it may be that an event in the source’s binary log file is preventing replication. In such cases, you could run the SET GLOBAL SQL_SLAVE_SKIP_COUNTER command to skip a certain number of events following the binary log file position you defined in the previous command:
+
+SET GLOBAL SQL_SLAVE_SKIP_COUNTER = 1; 
+
+Then:
+
+START REPLICA;
+
+Now open up the MySQL shell on your source machine:
+
+source:~$ sudo mysql
+
+Select the database you chose to replicate:
+
+USE student_results_db;
+Then create a table within that database:
+
+CREATE TABLE relationship (
+description varchar(30));
+INSERT INTO sports VALUES
+('Football');
+
+On replica server’s MySQL shell, select the replicated database:
+
+USE student_results_db;
+
+Then run:
+
+SHOW TABLES;
+
+If replication is working correctly, you’ll see the table you just added to the source listed in this command’s output:
+From there execute:
+
+SELECT * FROM sports;
+
+The above operations returns that data in its output.
