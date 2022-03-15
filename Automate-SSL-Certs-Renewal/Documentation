@@ -1,0 +1,29 @@
+Prerequisites:
+Have port 80 and 8443(443) open in your firewall.
+Have Openssl installed.
+
+Install certbot on server:
+$ sudo apt install certbot
+
+Active firewall, e.g firewalld, open https port on the firewall:
+$ sudo ufw allow 443, 8443, 80
+
+Generate ssl certificates and keypair:
+$ sudo certbot certonly --standalone -d  www.tsebamokuli.org
+Now copy certificates to tomcat/conf path:
+$ sudo cp  /etc/letsencrypt/live/www.tsebamokuli.org/*.pem /etc/tomcat/conf/
+
+Configure Tomcat with the pem files:
+$ sudo nano /etc/tomcat/conf/server.xml
+
+Then add: 
+<Connector port="8443" protocol="org.apache.coyote.http11.Http11NioProtocol"
+               maxThreads="150" SSLEnabled="true">
+        <SSLHostConfig>
+            <Certificate certificateFile="conf/cert.pem"
+                 certificateKeyFile="conf/privkey.pem"
+                 certificateChainFile="conf/chain.pem" />
+        </SSLHostConfig>
+    </Connector>
+Restart tomcat:
+$ sudo systemctl restart tomcat
