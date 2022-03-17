@@ -18,3 +18,6 @@ current_time=$(date +%Y-%m-%d" "%H:%M:%S)
 #Remove all used binary log files
 sudo mysql -E --execute="PURGE BINARY LOGS BEFORE '$(date +%Y-%m-%d" "%H:%M:%S)'"
 
+#Execute script to upload to onedrive
+python3 /home/moletsane/Documents/ICAP/Tasks/Incremental_backup/upload_incremental.py
+
