@@ -38,10 +38,10 @@ for bin_log in $bin_log_files
  done
 
 
-if [ $dow == 2 ]
+if [ $dow == 5 ]
 then #take take full backup
         
-    docker exec bahmni_docker_emr-service_1  /usr/bin/mysqldump -uroot -pP@ssw0rd openmrs > /home/mojau_p/backup/full_backup_$(date +%d_%m_%Y).sql
+    docker exec bahmni_docker_emr-service_1  /usr/bin/mysqldump -uroot -pP@ssw0rd mojau_p > /home/mojau_p/backup/full_backup_$(date +%d_%m_%Y).sql
     
     gzip /home/mojau_p/backup/full_backup_$(date +%d_%m_%Y).sql
 
@@ -53,20 +53,19 @@ else #take incremental backup
     #Copy SQL of all binary files in .sql file 
     mysqlbinlog ${local_bin_logs[@]} > /home/mojau_p/backup/incremental_backup_$(date +%d_%m_%Y).sql
 
-    rm -r /home/mojau_p/backup/binary-log-files
-
     #Zip SQL file
     gzip /home/mojau_p/backup/incremental_backup_$(date +%d_%m_%Y).sql
 
 fi
 
 #Remove all used binary log files
-current_bin_log=$(sudo docker exec bahmni_docker_emr-service_1  /usr/bin/ls -tr /var/lib/mysql/ | egrep 'mysql-bin.' | tail -n -1)
+#docker exec bahmni_docker_emr-service_1  /usr/bin/rm
+current_bin_log=$(docker exec bahmni_docker_emr-service_1  /usr/bin/ls -ltr mysql-bin.* | tail -n -1)
 
-docker exec bahmni_docker_emr-service_1  /usr/bin/mysql -uroot -pP@ssw0rd -E --execute="PURGE BINARY LOGS TO '${current_bin_log}'"
+docker exec bahmni_docker_emr-service_1  /usr/bin/mysql -uroot -pP@ssw0rd -E --execute="PURGE BINARY LOGS BEFORE '${current_bin_log}'"
 
 #send backup to cloud
-python3 /home/mojau_p/backups1/upload.py
+#python3 /home/mojau_p/Documents/ICAP/NUL_2022-Internship/Automate-HIE-Backups/upload.py
 
 #Clear backups directory
 #rm /home/mojau_p/backup/incremental_backup_*
