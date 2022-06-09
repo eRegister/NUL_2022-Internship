@@ -11,6 +11,6 @@ else
    echo "Renewing ssl certificate..."
    rm /usr/share/openshr/tomcat/conf/*.pem
    cp /etc/letsencrypt/live/devthebukana.org-0003/{cert,chain,privkey,fullchain}.pem /usr/share/opens$
-   chmod +x /usr/share/openshr/tomcat/*.pem
+   chmod +x /usr/share/openshr/tomcat/conf/*.pem
    systemctl restart tomcat.service
 fi
